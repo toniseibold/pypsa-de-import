@@ -815,6 +815,54 @@ def FT_production_limit(n, investment_year, config):
         )
 
 
+def ramp_up_limit_non_EU(n, n_snapshots, limits_volume_max, investment_year):
+
+    if investment_year not in limits_volume_max["h2_derivate_import"]["DE"].keys():
+        return
+    limit = limits_volume_max["h2_derivate_import"]["DE"][investment_year] * 1e6
+
+    logger.info(f"limiting non European H2 derivate imports to DE to {limit/1e6} TWh/a")
+
+    non_eu_links = n.links[
+        (n.links.bus1.str[:2] == "DE") &
+        (n.links.carrier.str.contains("import")) &
+        ~(n.links.carrier.str.contains("h2"))
+        ].index
+
+    incoming_p = (
+        n.model["Link-p"].loc[:, non_eu_links] * n.snapshot_weightings.generators
+    ).sum()
+
+    lhs = incoming_p
+
+    cname = "non_European_H2_derivate_import_limit-DE"
+
+    n.model.add_constraints(lhs <= limit, name=f"GlobalConstraint-{cname}")
+
+    if investment_year not in limits_volume_max["h2_import"]["DE"].keys():
+        return
+    limit = limits_volume_max["h2_import"]["DE"][investment_year] * 1e6
+
+    logger.info(f"limiting non European H2 imports to DE to {limit/1e6} TWh/a")
+
+    non_eu_links = n.links[
+        (n.links.bus1.str[:2] == "DE") &
+        (n.links.carrier.str.contains("import")) &
+        (n.links.carrier.str.contains("h2"))
+        ].index
+
+    incoming_p = (
+        n.model["Link-p"].loc[:, non_eu_links] * n.snapshot_weightings.generators
+    ).sum()
+
+    lhs = incoming_p
+
+    cname = "non_European_H2_import_limit-DE"
+
+    n.model.add_constraints(lhs <= limit, name=f"GlobalConstraint-{cname}")
+
+
+
 def additional_functionality(n, snapshots, snakemake):
 
     logger.info("Adding Ariadne-specific functionality")
@@ -876,6 +924,9 @@ def additional_functionality(n, snapshots, snakemake):
     if limit_eu_de:
         logger.info("Adding import limit for European imports to Germany.")
         import_limit_eu(n, snapshots, limit_eu_de, investment_year)
+    if 'import shipping-lh2' in n.links.carrier.unique():
+        logger.info("Ramp up import limit for non European imports to Germany.")
+        ramp_up_limit_non_EU(n, snapshots, constraints["limits_volume_max"], investment_year)
     if limit_non_eu_de:
         logger.info("Adding import limit for non European imports to Germany.")
         import_limit_non_eu(n, snapshots, limit_non_eu_de, investment_year)
