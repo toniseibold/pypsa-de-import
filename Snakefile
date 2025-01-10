@@ -799,3 +799,15 @@ rule modify_final_network:
         ),
     script:
         "scripts/pypsa-de/modify_final_network.py"
+
+
+rule check_final_network:
+    params:
+        config=config_provider("sector"),
+    input:
+        network=RESULTS
+        + "prenetworks-final-import/base_s_{clusters}_l{ll}_{opts}_{sector_opts}_{planning_horizons}.nc",
+    log: RESULTS +
+        logs("check_final_network_s_{clusters}_l{ll}_{opts}_{sector_opts}_{planning_horizons}.log"),
+    script:
+        "scripts/pypsa-de/check_final_network.py"

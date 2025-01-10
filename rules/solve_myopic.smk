@@ -123,6 +123,8 @@ rule solve_sector_network_myopic:
         + "prenetworks-final-import/base_s_{clusters}_l{ll}_{opts}_{sector_opts}_{planning_horizons}.nc",
         co2_totals_name=resources("co2_totals.csv"),
         energy_totals=resources("energy_totals.csv"),
+        check = RESULTS +
+        logs("check_final_network_s_{clusters}_l{ll}_{opts}_{sector_opts}_{planning_horizons}.log")
     output:
         network=RESULTS
         + "postnetworks/base_s_{clusters}_l{ll}_{opts}_{sector_opts}_{planning_horizons}.nc",
