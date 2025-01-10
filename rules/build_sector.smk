@@ -692,7 +692,7 @@ rule build_industrial_production_per_node:
 rule build_industrial_energy_demand_per_node:
     input:
         industry_sector_ratios=resources(
-            "industry_sector_ratios_{planning_horizons}.csv"
+            "industry_sector_ratios_{planning_horizons}-modified.csv"
         ),
         industrial_production_per_node=resources(
             "industrial_production_base_s_{clusters}_{planning_horizons}.csv"

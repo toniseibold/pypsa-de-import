@@ -155,7 +155,8 @@ def define_spatial(nodes, options):
     spatial.gas.df = pd.DataFrame(vars(spatial.gas), index=nodes)
     spatial.biogas.df = pd.DataFrame(vars(spatial.biogas), index=nodes)
     # ammonia
-
+    # TONI TODO: if relocation is activated allow spatial.ammonia.demand to be EU NH3
+    # options.relocation
     if options["ammonia"]:
         spatial.ammonia = SimpleNamespace()
         if options["ammonia"] == "regional":
@@ -178,9 +179,13 @@ def define_spatial(nodes, options):
     # this allows to avoid separation between nodes and locations
 
     spatial.methanol = SimpleNamespace()
-
-    spatial.methanol.nodes = ["EU methanol"]
-    spatial.methanol.locations = ["EU"]
+    # TONI TODO: no_relocation
+    if options.get("relocation") == "methanol":
+        spatial.methanol.nodes = ["EU methanol"]
+        spatial.methanol.locations = ["EU"]
+    else:
+        spatial.methanol.nodes = nodes + " methanol"
+        spatial.methanol.locations = nodes
 
     if options["methanol"]["regional_methanol_demand"]:
         spatial.methanol.demand_locations = nodes
@@ -4823,6 +4828,7 @@ if __name__ == "__main__":
             ll="vopt",
             sector_opts="",
             planning_horizons="2030",
+            run="eu_import-meoh_relocation",
         )
 
     configure_logging(snakemake)

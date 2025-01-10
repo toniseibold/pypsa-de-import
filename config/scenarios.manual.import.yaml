@@ -1,0 +1,88 @@
+# -*- coding: utf-8 -*-
+# SPDX-FileCopyrightText: : 2017-2023 The PyPSA-Eur Authors
+#
+# SPDX-License-Identifier: MIT
+
+all_import_me_all:
+  iiasa_database:
+    reference_scenario: KN2045_Bal_v4
+    fallback_reference_scenario: KN2045_Bal_v4
+  co2_budget_DE_source: KSG
+
+  sector:
+    relocation: false
+
+
+no_import-no_relocation:
+  iiasa_database:
+    reference_scenario: KN2045_Bal_v4
+    fallback_reference_scenario: KN2045_Bal_v4
+  co2_budget_DE_source: KSG
+
+  sector:
+    relocation: false
+
+  solving:
+    constraints:
+      limit_eu_de: true # true equals 0 or false
+
+eu_import-no_relocation:
+  iiasa_database:
+    reference_scenario: KN2045_Bal_v4
+    fallback_reference_scenario: KN2045_Bal_v4
+  co2_budget_DE_source: KSG
+  
+  sector:
+    relocation: false
+
+eu_import-steel_relocation:
+  iiasa_database:
+    reference_scenario: KN2045_Bal_v4
+    fallback_reference_scenario: KN2045_Bal_v4
+  co2_budget_DE_source: KSG
+
+  sector:
+    relocation: "steel"
+
+eu_import-nh3_relocation:
+  iiasa_database:
+    reference_scenario: KN2045_Bal_v4
+    fallback_reference_scenario: KN2045_Bal_v4
+  co2_budget_DE_source: KSG
+
+  sector:
+    relocation: "ammonia"
+
+eu_import-meoh_relocation:
+  iiasa_database:
+    reference_scenario: KN2045_Bal_v4
+    fallback_reference_scenario: KN2045_Bal_v4
+  co2_budget_DE_source: KSG
+
+  sector:
+    relocation: "methanol"
+
+eu_import-all_relocation:
+  iiasa_database:
+    reference_scenario: KN2045_Bal_v4
+    fallback_reference_scenario: KN2045_Bal_v4
+  co2_budget_DE_source: KSG
+
+  sector:
+    relocation: true
+
+non_eu_import-all_relocation:
+  iiasa_database:
+    reference_scenario: KN2045_Bal_v4
+    fallback_reference_scenario: KN2045_Bal_v4
+  co2_budget_DE_source: KSG
+
+  sector:
+    relocation: true
+
+  import:
+    enable: true
+  solving:
+    constraints:
+      limit_eu_de: false # true equals 0 or false
+      limit_non_eu_de: false # true equals 0 or false

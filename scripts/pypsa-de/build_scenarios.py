@@ -184,8 +184,6 @@ def write_to_scenario_yaml(input, output, scenarios, df):
             co2_budget_source,
         )
 
-        config[scenario]["sector"] = {}
-
         config[scenario]["sector"]["aviation_demand_factor"] = {}
         for year in planning_horizons:
             config[scenario]["sector"]["aviation_demand_factor"][year] = round(
@@ -200,7 +198,8 @@ def write_to_scenario_yaml(input, output, scenarios, df):
             dri_fraction = get_DRI_share(
                 df.loc[:, reference_scenario, :], planning_horizons
             )
-
+            if "industry" not in config[scenario]:
+                config[scenario]["industry"] = {}
             config[scenario]["industry"]["St_primary_fraction"] = {}
             config[scenario]["industry"]["DRI_fraction"] = {}
             for year in st_primary_fraction.columns:
@@ -210,6 +209,12 @@ def write_to_scenario_yaml(input, output, scenarios, df):
                 config[scenario]["industry"]["DRI_fraction"][year] = round(
                     dri_fraction.loc["DRI_Steel_Share", year].item(), 4
                 )
+        if "solving" not in config[scenario]:
+            config[scenario]["solving"] = {}
+            config[scenario]["solving"]["constraints"] = {}
+
+        if "co2_budget_national" not in config[scenario]["solving"]["constraints"]:
+                config[scenario]["solving"]["constraints"]["co2_budget_national"] = {}
 
         config[scenario]["solving"]["constraints"]["co2_budget_national"] = {}
         for year, target in co2_budget_fractions.items():

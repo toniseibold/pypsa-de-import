@@ -294,10 +294,10 @@ def add_wasserstoff_kernnetz(n, wkn, costs):
     # from 2030 onwards all pipes are extendable (except from the ones the model build up before and the kernnetz lines)
 
 
-def unravel_carbonaceous_fuels(n):
+def unravel_oil(n):
     """
-    Unravel European carbonaceous buses and if necessary their loads to enable
-    energy balances for import and export of carbonaceous fuels.
+    Unravel European oil buses and if necessary their loads to enable
+    energy balances for import and export of oil.
     """
     ### oil bus
     logger.info("Unraveling oil bus")
@@ -435,8 +435,8 @@ def unravel_carbonaceous_fuels(n):
             "There are loads at the EU oil bus. Please set config[sector][regional_oil_demand] to True to enable energy balances for oil."
         )
 
-    ##########################################
-    ### meoh bus
+
+def unravel_meoh(n, costs):
     logger.info("Unraveling methanol bus")
     # add bus
     n.add(
@@ -1260,12 +1260,12 @@ if __name__ == "__main__":
         snakemake = mock_snakemake(
             "modify_prenetwork",
             simpl="",
-            clusters=27,
+            clusters=68,
             opts="",
             ll="vopt",
             sector_opts="none",
-            planning_horizons="2025",
-            run="KN2045_Bal_v4",
+            planning_horizons="2030",
+            run="eu_import-meoh_relocation",
         )
 
     configure_logging(snakemake)
@@ -1296,7 +1296,10 @@ if __name__ == "__main__":
     first_technology_occurrence(n)
 
     if not snakemake.config["run"]["debug_unravel_oilbus"]:
-        unravel_carbonaceous_fuels(n)
+        unravel_oil(n)
+
+    if snakemake.params.relocation == "methanol":
+        unravel_meoh(n, costs)
 
     if not snakemake.config["run"]["debug_unravel_gasbus"]:
         unravel_gasbus(n, costs)

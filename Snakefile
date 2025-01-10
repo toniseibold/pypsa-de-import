@@ -312,6 +312,7 @@ rule modify_prenetwork:
         shipping_methanol_share=config_provider("sector", "shipping_methanol_share"),
         mwh_meoh_per_tco2=config_provider("sector", "MWh_MeOH_per_tCO2"),
         scale_capacity=config_provider("scale_capacity"),
+        relocation=config_provider("sector", "relocation"),
     input:
         costs_modifications="ariadne-data/costs_{planning_horizons}-modifications.csv",
         network=RESULTS
@@ -705,3 +706,93 @@ rule ariadne_report_only:
             RESULTS + "ariadne/report/elec_price_duration_curve.png",
             run=config_provider("run", "name"),
         ),
+
+
+rule modify_sector_ratios:
+    params:
+        future_DE=config_provider("industry", "sector_ratios_fraction_future_DE"),
+    input:
+        industry_sector_ratios=resources("industry_sector_ratios.csv"),
+        industrial_energy_demand_per_country_today=resources(
+            "industrial_energy_demand_per_country_today.csv"
+        ),
+        industrial_production_per_country=resources(
+            "industrial_production_per_country.csv"
+        ),
+        sector_ratios=resources("industry_sector_ratios_{planning_horizons}.csv"),
+    output:
+        sector_ratios_modified=resources(
+            "industry_sector_ratios_{planning_horizons}-modified.csv"
+        ),
+    resources:
+        mem_mb=2000,
+    log:
+        logs("modify_industry_sector_ratios_{planning_horizons}}.log"),
+    script:
+        "scripts/pypsa-de/modify_sector_ratios.py"
+
+ruleorder: modify_sector_ratios > build_industry_sector_ratios_intermediate
+
+
+rule build_import_ports:
+    input:
+        gem="data/gem/Europe-Gas-Tracker-2024-05.xlsx",
+        entry="data/gas_network/scigrid-gas/data/IGGIELGN_BorderPoints.geojson",
+        storage="data/gas_network/scigrid-gas/data/IGGIELGN_Storages.geojson",
+        regions_onshore=resources("regions_onshore_base_s_{clusters}.geojson"),
+        regions_offshore=resources("regions_offshore_base_s_{clusters}.geojson"),
+        europe_shape=resources("europe_shape.geojson"),
+        reference_import_sites=("import-data/import-sites.csv"),
+    output:
+        ports=resources("ports_s_{clusters}.csv"),
+        gas_input_nodes_simplified=resources(
+            "gas_input_nodes_simplified_elec_s_{clusters}.csv"
+        ),
+    resources:
+        mem_mb=2000,
+    log:
+        logs("build_import_ports_{clusters}.log"),
+    script:
+        "scripts/pypsa-de/build_import_ports.py"
+
+
+rule modify_final_network:
+    params:
+        temporal_clustering=config_provider(
+            "clustering", "temporal", "resolution_sector"
+        ),
+        import_options=config_provider("import"),
+        sector_options=config_provider("sector"),
+        costs=config_provider("costs"),
+        non_eu_constraint=config_provider("solving", "constraints", "limit_non_eu_de"),
+        trace_scenario=config_provider("import", "trace_scenario"),
+    input:
+        network=RESULTS
+        + "prenetworks-final/base_s_{clusters}_l{ll}_{opts}_{sector_opts}_{planning_horizons}.nc",
+        gas_input_nodes_simplified=resources(
+            "gas_input_nodes_simplified_elec_s_{clusters}.csv"
+        ),
+        import_ports=resources("ports_s_{clusters}.csv"),
+        import_costs="import-data/imports/{planning_horizons}/results.csv",
+        hvdc_data="import-data/imports/combined_weighted_generator_timeseries.nc",
+        regions_onshore=resources("regions_onshore_base_s_{clusters}.geojson"),
+        country_centroids="import-data/countries_centroids.csv",
+        costs=resources("costs_{planning_horizons}.csv"),
+        clustered_pop_layout=resources("pop_layout_base_s_{clusters}.csv"),
+        industry_sector_ratios=resources(
+            "industry_sector_ratios_{planning_horizons}.csv"
+        ),
+        industrial_production=resources(
+            "industrial_production_base_s_{clusters}_{planning_horizons}.csv"
+        ),
+        country_shapes="data/naturalearth/ne_10m_admin_0_countries_deu.shp",
+    output:
+        network=RESULTS
+        + "prenetworks-final-import/base_s_{clusters}_l{ll}_{opts}_{sector_opts}_{planning_horizons}.nc",
+    log:
+        RESULTS
+        + logs(
+            "modify_final_network_s_{clusters}_l{ll}_{opts}_{sector_opts}_{planning_horizons}.log"
+        ),
+    script:
+        "scripts/pypsa-de/modify_final_network.py"

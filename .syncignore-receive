@@ -14,3 +14,8 @@ data
 resources
 *.nc
 ariadne-data
+
+# imports specific
+import-data
+benchmarks
+logs
