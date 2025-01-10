@@ -9,7 +9,7 @@ run:
   # - no_import-no_relocation
   - eu_import-no_relocation
   # - eu_import-steel_relocation
-  # - eu_import-nh3_relocation
+  - eu_import-nh3_relocation
   - eu_import-meoh_relocation
   # - eu_import-all_relocation
   # - non_eu_import-all_relocation

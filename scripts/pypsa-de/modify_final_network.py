@@ -574,26 +574,6 @@ def endogenise_steel(n, costs, sector_options, relocation_option):
 
     endogenous_sectors = []
 
-    if not sector_options["steel"]["endogenous"]:
-        logger.error(
-            "Endogenous steel demand must be activated. Please set config['sector']['steel']['endogenous'] to True."
-        )
-        sys.exit()
-    if not sector_options["H2_network"]:
-        logger.error(
-            "H2 network with regional demand must be activated. Please set config['sector']['H2_network'] to True."
-        )
-        sys.exit()
-    if (
-        not sector_options["methanol"]["regional_methanol_demand"]
-        or not sector_options["regional_oil_demand"]
-        or not sector_options["regional_coal_demand"]
-    ):
-        logger.error(
-            "Regional methanol, oil and coal demand must be activated. Please set config['sector']['methanol']['regional_methanol_demand'], config['sector']['regional_oil_demand'] and config['sector']['regional_coal_demand'] to True."
-        )
-        sys.exit()
-
     logger.info("Adding endogenous primary steel demand in tonnes.")
 
     sector = "DRI + Electric arc"
@@ -878,213 +858,64 @@ def adjust_industry_loads(n, nodes, industrial_demand, endogenous_sectors):
 
     n.loads.loc[process_emissions.index, "p_set"] = process_emissions.values
 
-    if sector_options["co2network"]:
-        logger.error(
-            "CO2 network not working yet. Please add code to the function adjust_industry_loads()."
-        )
 
+def relocate_ammonia(n):
 
-def relocate_ammonia(n, relocation_option, EU_nodes, DE_nodes):
-
-    if sector_options["ammonia"] != "regional":
-        logger.error("Ammonia sector must be regional. Please set config['sector']['ammonia'] to 'regional'.")
-        sys.exit()
-
-    # create a new NH3 bus for EU
-    n.add("Bus", "EU NH3", location="EU", carrier="NH3", unit="MWh_th")
-    # change bus1 of European Haber-Bosch links to EU NH3
-    HB_links = n.links[(n.links.carrier == "Haber-Bosch") & (n.links.index.str[:2] != "DE")].index
-    n.links.loc[HB_links, "bus1"] = "EU NH3"
-    # get European loads and aggregate
-    loads = n.loads[(n.loads.carrier=="NH3") & (n.loads.bus.str[:2] != "DE")].index
-    p_set = n.loads.loc[loads, "p_set"].sum()
-    # drop EU loads
-    n.loads.drop(loads, inplace=True)
-    # add one EU load
-    n.add("Load", "EU NH3", bus="EU NH3", carrier="NH3", p_set=p_set)
-    # drop all all EU buses but not the new NH3 bus
-    n.buses.drop(EU_nodes + " NH3", inplace=True)
-    n.stores.drop(n.stores[n.stores.carrier=="ammonia store"].index, inplace=True)
-
-    if relocation_option == "all" or relocation_option == "ammonia":
-        # make one German load for ammonia
-        logger.info("Allowing relocation of ammonia industry.")
-        # add German NH3 bus
-        n.add("Bus", "DE NH3", x=x, y=y, carrier="NH3", unit="MWh_th")
-        # change bus1 of German Haber-Bosch links to DE NH3
-        ammonia_links = n.links[(n.links.carrier == "Haber-Bosch") & (n.links.index.str[:2] == "DE")].index
-        n.links.loc[ammonia_links, "bus1"] = "DE NH3"
-        # add German load
-        loads = n.loads[(n.loads.carrier=="NH3") & (n.loads.bus.str[:2] == "DE")].index
-        p_set = n.loads.loc[loads, "p_set"].sum()
-        # drop DE loads
-        n.loads.drop(loads, inplace=True)
-        # add one DE load
-        n.add("Load", "DE NH3", bus="DE NH3", carrier="NH3", p_set=p_set) 
-        # drop all DE NH3 buses
-        n.buses.drop(DE_nodes + " NH3", inplace=True)
-        # add transport link between DE and EU
-        n.add(
-            "Link",
-            ["DE NH3 -> EU NH3", "EU NH3 -> DE NH3"],
-            bus0=["DE NH3", "EU NH3"],
-            bus1=["EU NH3", "EU NH3"],
-            carrier="NH3",
-            p_nom=1e6,
-            p_min_pu=0,
-            marginal_cost=0.01,
-        )
-
-
-def relocate_methanol(n, relocation_option, EU_nodes, DE_nodes):
-    # get industry methanol load for German nodes
-    if not sector_options["methanol"]["regional_methanol_demand"]:
-        logger.error("Methanol demand must be regional. Please set config['sector']['methanol']['regional_methanol_demand'] True.")
-        sys.exit()
-
-    # only one link from EU methanol to EU industry methanol
-    n.add("Bus", "EU industry methanol", carrier="industry methanol", location="EU", unit="MWh_th")
-    n.add("Link",
-          "EU industry methanol",
-          bus0="EU methanol",
-          bus1="EU industry methanol",
-          carrier="industry methanol",
-          p_nom=1e6,
-          )
-    # aggregate industry load
-    industry_meoh_loads = n.loads[(n.loads.carrier=="industry methanol") & (n.loads.bus.str[:2] != "DE")].index
-    p_set = n.loads.loc[industry_meoh_loads, "p_set"].sum()
-    # add new load
-    n.add("Load", "EU industry methanol", bus="EU industry methanol", carrier="industry methanol", p_set=p_set)
-    # drop EU loads and buses
-    n.loads.drop(industry_meoh_loads, inplace=True)
-    n.buses.drop(EU_nodes + " industry methanol", inplace=True)
-    n.links.drop(EU_nodes + " industry methanol", inplace=True)
-
-    # same logic for shipping
-    n.add("Bus", "EU shipping methanol", carrier="shipping methanol", location="EU", unit="MWh_LHV")
-    n.add("Link",
-            "EU shipping methanol",
-            bus0="EU methanol",
-            bus1="EU shipping methanol",
-            carrier="shipping methanol",
-            p_nom=1e6,
-            )
-    # aggregate shipping load
-    shipping_meoh_loads = n.loads[(n.loads.carrier=="shipping methanol") & (n.loads.bus.str[:2] != "DE")].index
-    p_set = n.loads.loc[shipping_meoh_loads, "p_set"].sum()
-    # add new load
-    n.add("Load", "EU shipping methanol", bus="EU shipping methanol", carrier="shipping methanol", p_set=p_set)
-    # drop EU loads and buses
-    n.loads.drop(shipping_meoh_loads, inplace=True)
-    n.buses.drop(EU_nodes + " shipping methanol", inplace=True)
-    n.links.drop(EU_nodes + " shipping methanol", inplace=True)
-
-    # if not (relocation_option == "all" or relocation_option == "methanol"):
-    #     # add German methanol buses
-    #     n.add("Bus", DE_nodes, suffix=" methanol", carrier="methanol", unit="MWh_LHV", location=DE_nodes, country="DE")
-    #     # change bus0 of industry methanol from DE to DE0 0 methanol
-    #     ind_meoh_links = n.links[(n.links.carrier=="industry methanol") & (n.links.index.str[:2] == "DE")].index
-    #     n.links.loc[ind_meoh_links, "bus0"] = DE_nodes + " methanol"
-    #     # change bus1 of methanolisation from DE to DE0 methanol
-    #     methanolisation_links = n.links[(n.links.carrier=="methanolisation") & (n.links.index.str[:2] == "DE")].index
-    #     n.links.loc[methanolisation_links, "bus1"] = DE_nodes + " methanol"
-
-    #     # shipping
-    #     n.add("Bus", "DE shipping methanol", carrier="shipping methanol", location="DE", country="DE", x=y, y=y, unit="MWh_LHV")
-    #     # change bus1 of shipping methanol to DE shipping methanol
-    #     shipping_meoh_links = n.links[(n.links.carrier=="shipping methanol") & (n.links.index.str[:2] == "DE")].index
-    #     n.links.loc[shipping_meoh_links, "bus1"] = "DE shipping methanol"
-    #     n.links.loc[shipping_meoh_links, "bus0"] = DE_nodes + " methanol"
-    #     # aggregate shipping load
-    #     shipping_meoh_loads = n.loads[(n.loads.carrier=="shipping methanol") & (n.loads.bus.str[:2] == "DE")].index
-    #     p_set = n.loads.loc[shipping_meoh_loads, "p_set"].sum()
-    #     # add new load
-    #     n.add("Load", "DE shipping methanol", bus="DE shipping methanol", carrier="shipping methanol", p_set=p_set)
-    #     # drop DE methanol bus
-    #     n.buses.drop("DE methanol", inplace=True)
-    #     # drop DE loads
-    #     n.loads.drop(shipping_meoh_loads, inplace=True)
-    #     # allow transport of shipping methanol between DE and EU
-    #     if "EU methanol -> DE methanol" in n.links.index:
-    #         n.links.drop("EU methanol -> DE methanol", inplace=True)
-    #     if "DE methanol -> EU methanol" in n.links.index:
-    #         n.links.drop("DE methanol -> EU methanol", inplace=True)
-    #     n.add("Link",
-    #           "EU methanol -> DE shipping methanol",
-    #           bus0="EU methanol",
-    #           bus1="DE shipping methanol",
-    #           carrier="shipping methanol",
-    #           p_nom=1e6,
-    #           p_min_pu=0,
-    #           marginal_cost=0.01
-    #     )
-    #     n.add("Link",
-    #           "DE shipping methanol -> EU methanol",
-    #           bus0="DE shipping methanol",
-    #           bus1="EU methanol",
-    #           carrier="shipping methanol",
-    #           p_nom=1e6,
-    #           p_min_pu=0,
-    #           marginal_cost=0.01
-    #     )
-
-    # else:
-    # add one German industry load
-    n.add("Bus", "DE industry methanol", carrier="industry methanol", location="DE", country="DE", x=x, y=y, unit="MWh_LHV")
-    n.add("Link", 
-            "DE industry methanol",
-            bus0="DE methanol",
-            bus1="DE industry methanol",
-            carrier="industry methanol",
-            p_nom=1e6,
-        )
-
-    n.links.drop(DE_nodes + " industry methanol", inplace=True)
-
-    n.links.loc[ind_meoh_links, "bus1"] = "DE industry methanol"
-    # aggregate industry load
-    industry_meoh_loads = n.loads[(n.loads.carrier=="industry methanol") & (n.loads.bus.str[:2] == "DE")].index
-    p_set = n.loads.loc[industry_meoh_loads, "p_set"].sum()
-    # add new load
-    n.add("Load", "DE industry methanol", bus="DE industry methanol", carrier="industry methanol", p_set=p_set)
-    # drop loads
-    n.loads.drop(industry_meoh_loads, inplace=True)
-
-    # shipping
-    n.add("Bus", "DE shipping methanol", carrier="shipping methanol", country="DE", location="DE", x=x, y=y, unit="MWh_LHV")
-    # change bus1 of shipping methanol to DE shipping methanol
-    shipping_meoh_links = n.links[(n.links.carrier=="shipping methanol") & (n.links.index.str[:2] == "DE")].index
-    n.links.drop(shipping_meoh_links, inplace=True)
-    n.add("Link",
-            "DE shipping methanol",
-            bus0="DE methanol",
-            bus1="DE shipping methanol",
-            carrier="shipping methanol",
-            p_nom=1e6,
-        )
-    # aggregate shipping load
-    shipping_meoh_loads = n.loads[(n.loads.carrier=="shipping methanol") & (n.loads.bus.str[:2] == "DE")].index
-    p_set = n.loads.loc[shipping_meoh_loads, "p_set"].sum()
-    # add new load
-    n.add("Load", "DE shipping methanol", bus="DE shipping methanol", carrier="shipping methanol", p_set=p_set)
-    # drop DE methanol buses
-    n.links.drop(DE_nodes + " shipping methanol", inplace=True)
-    # drop DE loads
-    n.loads.drop(shipping_meoh_loads, inplace=True)
-
-
-def relocate_industry(n, relocation_option):
-
-    if relocation_option:
-        logger.info(f"Allowing {relocation_option} industry to relocate.")
-
+    # get nodes
     pop_layout = pd.read_csv(snakemake.input.clustered_pop_layout, index_col=0)
     EU_nodes = pop_layout[pop_layout.index.str[:2] != "DE"].index
     DE_nodes = pop_layout[pop_layout.index.str[:2] == "DE"].index
+    nhours = n.snapshot_weightings.generators.sum()
 
-    relocate_ammonia(n, relocation_option, EU_nodes, DE_nodes)
-    relocate_methanol(n, relocation_option, EU_nodes, DE_nodes)
+    # adjust the ammonia loads
+    logger.info("Allowing relocation of ammonia industry.")
+    # add German NH3 bus
+    n.add("Bus", "DE NH3", x=x, y=y, carrier="NH3", unit="MWh_th")
+    # TWh to MWh
+    industrial_demand = pd.read_csv(snakemake.input.industrial_demand, index_col=0) * 1e6
+    p_set = industrial_demand.loc[:, "ammonia"].rename(
+                    index=lambda x: x + " NH3").groupby(level=0).sum() / nhours
+    p_set_DE = p_set[DE_nodes + " NH3"].sum()
+    p_set_EU = p_set[EU_nodes + " NH3"].sum()
+    n.add(
+            "Load",
+            "DE NH3",
+            bus="DE NH3",
+            carrier="NH3",
+            p_set=p_set_DE,
+        )
+    n.loads.loc["EU NH3", "p_set"] = p_set_EU
+
+    # change bus1 of German Haber-Bosch links to DE NH3
+    ammonia_links = n.links[(n.links.carrier == "Haber-Bosch") & (n.links.index.str[:2] == "DE")].index
+    n.links.loc[ammonia_links, "bus1"] = "DE NH3"
+
+    # add transport link between DE and EU
+    n.add(
+        "Link",
+        ["DE NH3 -> EU NH3", "EU NH3 -> DE NH3"],
+        bus0=["DE NH3", "EU NH3"],
+        bus1=["EU NH3", "EU NH3"],
+        carrier="NH3",
+        p_nom=1e6,
+        p_min_pu=0,
+        marginal_cost=0.01,
+    )
+    # copy the ammonia store for the current planning_horizon
+    # add stores
+    planning_horizon = snakemake.wildcards.planning_horizons
+    EU_store = n.stores.loc[f"EU NH3 ammonia store-{planning_horizon}"].copy()
+    n.add(
+        "Store",
+        "DE ammonia store-" + planning_horizon,
+        bus="DE methanol",
+        carrier="methanol",
+        e_nom_extendable=EU_store.e_nom_extendable,
+        e_cyclic=EU_store.e_cyclic,
+        capital_cost=EU_store.capital_cost,
+        overnight_cost=EU_store.overnight_cost,
+        lifetime=costs.at["General liquid hydrocarbon storage (product)", "lifetime"],
+    )
 
 
 
@@ -1098,7 +929,7 @@ if __name__ == "__main__":
             ll="vopt",
             sector_opts="none",
             planning_horizons="2030",
-            run="no_import-no_relocation",
+            run="eu_import-nh3_relocation",
         )
 
     configure_logging(snakemake)
@@ -1117,12 +948,8 @@ if __name__ == "__main__":
 
     endogenise_steel(n, costs, sector_options, relocation_option)
 
-    # if sector_options.get("relocation"):
-    #     pop_layout = pd.read_csv(snakemake.input.clustered_pop_layout, index_col=0)
-    #     EU_nodes = pop_layout[pop_layout.index.str[:2] != "DE"].index
-    #     DE_nodes = pop_layout[pop_layout.index.str[:2] == "DE"].index
-    #     relocate_methanol(n, relocation_option, EU_nodes, DE_nodes)
-    # relocate_industry(n, relocation_option)
+    if relocation_option == "ammonia":
+        relocate_ammonia(n)
 
     if import_options["enable"]:
         # all import vectors or only h2 + elec

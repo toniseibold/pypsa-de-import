@@ -155,13 +155,14 @@ def define_spatial(nodes, options):
     spatial.gas.df = pd.DataFrame(vars(spatial.gas), index=nodes)
     spatial.biogas.df = pd.DataFrame(vars(spatial.biogas), index=nodes)
     # ammonia
-    # TONI TODO: if relocation is activated allow spatial.ammonia.demand to be EU NH3
-    # options.relocation
     if options["ammonia"]:
         spatial.ammonia = SimpleNamespace()
-        if options["ammonia"] == "regional":
+        if options["ammonia"] == "regional" and options["relocation"] != "ammonia":
             spatial.ammonia.nodes = nodes + " NH3"
             spatial.ammonia.locations = nodes
+        elif options["relocation"] == "ammonia":
+            spatial.ammonia.nodes = ["EU NH3"]
+            spatial.ammonia.locations = ["EU"]
         else:
             spatial.ammonia.nodes = ["EU NH3"]
             spatial.ammonia.locations = ["EU"]
@@ -179,7 +180,7 @@ def define_spatial(nodes, options):
     # this allows to avoid separation between nodes and locations
 
     spatial.methanol = SimpleNamespace()
-    # TONI TODO: no_relocation
+
     if options.get("relocation") == "methanol":
         spatial.methanol.nodes = ["EU methanol"]
         spatial.methanol.locations = ["EU"]
@@ -4138,7 +4139,7 @@ def add_industry(n, costs):
     )
 
     if options["ammonia"]:
-        if options["ammonia"] == "regional":
+        if options["ammonia"] == "regional" and options["relocation"] != "ammonia":
             p_set = (
                 industrial_demand.loc[spatial.ammonia.locations, "ammonia"].rename(
                     index=lambda x: x + " NH3"

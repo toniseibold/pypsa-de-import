@@ -785,6 +785,9 @@ rule modify_final_network:
         industrial_production=resources(
             "industrial_production_base_s_{clusters}_{planning_horizons}.csv"
         ),
+        industrial_demand=resources(
+            "industrial_energy_demand_base_s_{clusters}_{planning_horizons}.csv"
+        ),
         country_shapes="data/naturalearth/ne_10m_admin_0_countries_deu.shp",
     output:
         network=RESULTS
