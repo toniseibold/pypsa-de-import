@@ -157,10 +157,10 @@ def define_spatial(nodes, options):
     # ammonia
     if options["ammonia"]:
         spatial.ammonia = SimpleNamespace()
-        if options["ammonia"] == "regional" and options["relocation"] != "ammonia":
+        if options["ammonia"] == "regional" and options["relocation"] not in ["ammonia", "all"]:
             spatial.ammonia.nodes = nodes + " NH3"
             spatial.ammonia.locations = nodes
-        elif options["relocation"] == "ammonia":
+        elif options["relocation"] in ["ammonia", "all"]:
             spatial.ammonia.nodes = ["EU NH3"]
             spatial.ammonia.locations = ["EU"]
         else:
@@ -181,7 +181,7 @@ def define_spatial(nodes, options):
 
     spatial.methanol = SimpleNamespace()
 
-    if options.get("relocation") == "methanol":
+    if options.get("relocation") == "methanol" or options.get("relocation") == "all":
         spatial.methanol.nodes = ["EU methanol"]
         spatial.methanol.locations = ["EU"]
     else:
@@ -4139,7 +4139,7 @@ def add_industry(n, costs):
     )
 
     if options["ammonia"]:
-        if options["ammonia"] == "regional" and options["relocation"] != "ammonia":
+        if options["ammonia"] == "regional" and options["relocation"] not in ["ammonia", "all"]:
             p_set = (
                 industrial_demand.loc[spatial.ammonia.locations, "ammonia"].rename(
                     index=lambda x: x + " NH3"

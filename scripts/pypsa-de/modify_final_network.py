@@ -570,7 +570,7 @@ def endogenise_steel(n, costs, sector_options, relocation_option):
     sector = "DRI + Electric arc"
     endogenous_sectors += [sector]
 
-    if relocation_option == "steel" or relocation_option == "all":
+    if relocation_option in ["steel", "all"]:
         DE_steel_nodes = "DE"
         EU_steel_nodes = "EU"
         sector_options["steel"]["relocation"] = True
@@ -781,7 +781,7 @@ def endogenise_steel(n, costs, sector_options, relocation_option):
     )
 
     # allow transport of steel between EU and DE
-    if relocation_option == "steel" or relocation_option == "all":
+    if relocation_option in ["steel", "all"]:
         n.add(
             "Link",
             [
@@ -955,7 +955,7 @@ if __name__ == "__main__":
 
     endogenise_steel(n, costs, sector_options, relocation_option)
 
-    if relocation_option == "ammonia":
+    if relocation_option in ["ammonia", "all"]:
         relocate_ammonia(n)
 
     if import_options["enable"]:
