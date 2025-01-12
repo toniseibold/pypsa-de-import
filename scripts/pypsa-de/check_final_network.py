@@ -20,9 +20,6 @@ def check_basic_config_settings(n, config):
     if config["ammonia"] != "regional":
         logger.error("Ammonia sector must be regional. Please set config['sector']['ammonia'] to 'regional'.")
 
-    if config["methanol"] != "regional":
-        logger.error("Methanol sector must be regional. Please set config['sector']['methanol'] to 'regional'.")
-
     if not config["steel"]["endogenous"]:
         logger.error(
             "Endogenous steel demand must be activated. Please set config['sector']['steel']['endogenous'] to True."
@@ -103,10 +100,44 @@ def check_nh3_architecture(n):
         # there is no EU NH3 bus
         assert(n.buses[(n.buses.index.str.contains("EU")) & (n.buses.index.str.contains("NH3"))].empty)
         assert(n.buses[(n.buses.index.str.contains("EU")) & (n.buses.index.str.contains("ammonia"))].empty)
-        # there is no DE - EU methanol transpot link
+        # there is no DE - EU methanol transport link
         assert("EU NH3 -> DE NH3" not in n.links.index)
         assert("DE NH3 -> EU NH3" not in n.links.index)
     return
+
+
+def check_steel_architecture(n):
+    if config["relocation"] == "steel" or config["relocation"] == "all":
+        # DRI/EAF links are connected to DE or EU hbi/steel bus
+        assert(n.links[(n.links.carrier == "DRI") & (n.links.bus0.str[:2] == "DE")].bus1.unique() == "DE hbi")
+        assert(n.links[(n.links.carrier == "DRI") & (n.links.bus0.str[:2] != "DE")].bus1.unique() == "EU hbi")
+        assert(n.links[(n.links.carrier == "EAF") & (n.links.bus0.str[:2] == "DE")].bus1.unique() == "DE steel")
+        assert(n.links[(n.links.carrier == "EAF") & (n.links.bus0.str[:2] != "DE")].bus1.unique() == "EU steel")
+        # there are two steel loads
+        assert(not n.loads.loc["DE steel"].empty)
+        assert(not n.loads.loc["EU steel"].empty)
+        # there is a transport links from DE to EU and vice versa
+        assert(not n.links.loc["EU steel -> DE steel"].empty)
+        assert(not n.links.loc["DE steel -> EU steel"].empty)
+        assert(not n.links.loc["EU hbi -> DE hbi"].empty)
+        assert(not n.links.loc["DE hbi -> EU hbi"].empty)
+    else:
+        # DRI/EAF links are connected to DE or EU NH3 bus
+        assert(n.links[n.links.carrier == "DRI"].bus0.str[:2].equals(n.links[n.links.carrier == "DRI"].bus1.str[:2]))
+        assert(n.links[n.links.carrier == "EAF"].bus0.str[:2].equals(n.links[n.links.carrier == "EAF"].bus1.str[:2]))
+        assert(n.links[n.links.carrier == "DRI"].shape[0] == 68)
+        assert(n.links[n.links.carrier == "EAF"].shape[0] == 68)
+        # there are 68 steel loads
+        assert(n.loads[n.loads.carrier == "steel"].shape[0] == 68)
+        # there is no EU steel/hbi bus
+        assert(n.buses[(n.buses.index.str.contains("EU")) & (n.buses.index.str.contains("steel"))].empty)
+        assert(n.buses[(n.buses.index.str.contains("EU")) & (n.buses.index.str.contains("hbi"))].empty)
+        # there is no DE - EU steel/hbi transport link
+        assert("EU steel -> DE steel" not in n.links.index)
+        assert("DE steel -> EU steel" not in n.links.index)
+        assert("EU hbi -> DE hbi" not in n.links.index)
+        assert("DE hbi -> EU hbi" not in n.links.index)
+
 
 
 if __name__ == "__main__":
@@ -133,5 +164,7 @@ if __name__ == "__main__":
     check_meoh_architecture(n)
 
     check_nh3_architecture(n)
+
+    check_steel_architecture(n)
 
     logger.info("All checks passed.")

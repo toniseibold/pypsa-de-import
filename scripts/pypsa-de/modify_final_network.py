@@ -565,19 +565,24 @@ def endogenise_steel(n, costs, sector_options, relocation_option):
     EU_nodes = pop_layout[pop_layout.index.str[:2] != "DE"].index
     nodes = pop_layout.index
 
-    if relocation_option == "steel" or relocation_option == "all":
-        DE_steel_nodes = "DE"
-        sector_options["steel"]["relocation"] = True
-    else:
-        DE_steel_nodes = DE_nodes
-        sector_options["steel"]["relocation"] = False
-
     endogenous_sectors = []
-
     logger.info("Adding endogenous primary steel demand in tonnes.")
-
     sector = "DRI + Electric arc"
     endogenous_sectors += [sector]
+
+    if relocation_option == "steel" or relocation_option == "all":
+        DE_steel_nodes = "DE"
+        EU_steel_nodes = "EU"
+        sector_options["steel"]["relocation"] = True
+        german_steel_load = industrial_production.loc[DE_nodes][sector].sum() / nhours
+        EU_steel_load = industrial_production.loc[EU_nodes][sector].sum() / nhours
+
+    else:
+        DE_steel_nodes = DE_nodes
+        EU_steel_nodes = EU_nodes
+        german_steel_load = industrial_production.loc[DE_nodes][sector] / nhours
+        EU_steel_load = industrial_production.loc[EU_nodes][sector] / nhours
+        sector_options["steel"]["relocation"] = False
 
     no_relocation = not sector_options["steel"]["relocation"]
     no_flexibility = not sector_options["steel"]["flexibility"]
@@ -590,10 +595,13 @@ def endogenise_steel(n, costs, sector_options, relocation_option):
 
     n.add("Carrier", "steel")
     n.add("Carrier", "hbi")
+    n.add("Carrier", "DRI")
+    n.add("Carrier", "EAF")
     # add steel bus for German bus regions and EU
     n.add(
         "Bus",
-        "EU steel",
+        EU_steel_nodes,
+        suffix=" steel",
         carrier="steel",
         unit="t",
     )
@@ -608,7 +616,8 @@ def endogenise_steel(n, costs, sector_options, relocation_option):
 
     n.add(
         "Bus",
-        "EU hbi",
+        EU_steel_nodes,
+        suffix=" hbi",
         carrier="hbi",
         unit="t",
     )
@@ -622,15 +631,12 @@ def endogenise_steel(n, costs, sector_options, relocation_option):
     # load EU and DE steel
     n.add(
         "Load",
-        "EU steel",
-        bus="EU steel",
+        EU_steel_nodes,
+        suffix = " steel",
+        bus=EU_steel_nodes + " steel",
         carrier="steel",
-        p_set=industrial_production.loc[EU_nodes][sector].sum() / 8760,
+        p_set=EU_steel_load,
     )
-    german_steel_load = industrial_production.loc[DE_nodes][sector] / 8760
-
-    if relocation_option == "steel" or relocation_option == "all":
-        german_steel_load = german_steel_load.sum()
 
     n.add(
         "Load",
@@ -644,8 +650,8 @@ def endogenise_steel(n, costs, sector_options, relocation_option):
     if not no_flexibility:
         n.add(
             "Store",
-            "EU steel Store",
-            bus="EU steel",
+            EU_steel_nodes + " steel Store",
+            bus=EU_steel_nodes + " steel",
             e_nom_extendable=True,
             e_cyclic=True,
             carrier="steel",
@@ -660,8 +666,8 @@ def endogenise_steel(n, costs, sector_options, relocation_option):
         )
         n.add(
             "Store",
-            "EU hbi Store",
-            bus="EU hbi",
+            EU_steel_nodes + " hbi Store",
+            bus=EU_steel_nodes + " hbi",
             e_nom_extendable=True,
             e_cyclic=True,
             carrier="hbi",
@@ -681,16 +687,16 @@ def endogenise_steel(n, costs, sector_options, relocation_option):
 
     # so that for each region supply matches consumption
     p_nom_EU = (
-        industrial_production[industrial_production.index.str[:2] != "DE"][sector]
+        industrial_production.loc[EU_nodes, sector]
         * costs.at["electric arc furnace", "hbi-input"]
         * electricity_input
-        / 8760
+        / nhours
     )
     p_nom_DE = (
-        industrial_production[industrial_production.index.str[:2] == "DE"][sector]
+        industrial_production.loc[DE_nodes, sector]
         * costs.at["electric arc furnace", "hbi-input"]
         * electricity_input
-        / 8760
+        / nhours
     )
     marginal_cost = (
         costs.at["iron ore DRI-ready", "commodity"]
@@ -709,7 +715,7 @@ def endogenise_steel(n, costs, sector_options, relocation_option):
         p_nom=p_nom_EU if no_relocation else 0,
         p_nom_extendable=False if no_relocation else True,
         bus0=EU_nodes,
-        bus1="EU hbi",
+        bus1=EU_steel_nodes + " hbi",
         bus2=EU_nodes + " H2",
         efficiency=1 / electricity_input,
         efficiency2=-hydrogen_input / electricity_input,
@@ -735,14 +741,14 @@ def endogenise_steel(n, costs, sector_options, relocation_option):
     electricity_input = costs.at["electric arc furnace", "electricity-input"]
 
     p_nom_EU = (
-        industrial_production[industrial_production.index.str[:2] != "DE"][sector]
+        industrial_production.loc[EU_nodes, sector]
         * electricity_input
-        / 8760
+        / nhours
     )
     p_nom_DE = (
-        industrial_production[industrial_production.index.str[:2] == "DE"][sector]
+        industrial_production.loc[DE_nodes, sector]
         * electricity_input
-        / 8760
+        / nhours
     )
 
     n.add(
@@ -754,8 +760,8 @@ def endogenise_steel(n, costs, sector_options, relocation_option):
         p_nom=p_nom_EU if no_relocation else 0,
         p_nom_extendable=False if no_relocation else True,
         bus0=EU_nodes,
-        bus1="EU steel",
-        bus2="EU hbi",
+        bus1=EU_steel_nodes + " steel",
+        bus2=EU_steel_nodes + " hbi",
         efficiency=1 / electricity_input,
         efficiency2=-costs.at["electric arc furnace", "hbi-input"] / electricity_input,
     )
@@ -811,7 +817,7 @@ def adjust_industry_loads(n, nodes, industrial_demand, endogenous_sectors):
         .groupby(level=0)
         .sum()
         .rename(index=lambda x: x + " gas for industry")
-        / 8760
+        / nhours
     )
 
     n.loads.loc[gas_demand.index, "p_set"] = gas_demand.values
@@ -822,7 +828,7 @@ def adjust_industry_loads(n, nodes, industrial_demand, endogenous_sectors):
         .groupby(level=0)
         .sum()
         .rename(index=lambda x: x + " H2 for industry")
-        / 8760
+        / nhours
     )
 
     n.loads.loc[h2_demand.index, "p_set"] = h2_demand.values
@@ -833,7 +839,7 @@ def adjust_industry_loads(n, nodes, industrial_demand, endogenous_sectors):
         .groupby(level=0)
         .sum()
         .rename(index=lambda x: x + " low-temperature heat for industry")
-        / 8760
+        / nhours
     )
     n.loads.loc[heat_demand.index, "p_set"] = heat_demand.values
 
@@ -843,7 +849,7 @@ def adjust_industry_loads(n, nodes, industrial_demand, endogenous_sectors):
         .groupby(level=0)
         .sum()
         .rename(index=lambda x: x + " industry electricity")
-        / 8760
+        / nhours
     )
     n.loads.loc[elec_demand.index, "p_set"] = elec_demand.values
 
@@ -853,7 +859,7 @@ def adjust_industry_loads(n, nodes, industrial_demand, endogenous_sectors):
         .groupby(level=0)
         .sum()
         .rename(index=lambda x: x + " process emissions")
-        / 8760
+        / nhours
     )
 
     n.loads.loc[process_emissions.index, "p_set"] = process_emissions.values
@@ -929,7 +935,7 @@ if __name__ == "__main__":
             ll="vopt",
             sector_opts="none",
             planning_horizons="2030",
-            run="eu_import-nh3_relocation",
+            run="eu_import-no_relocation",
         )
 
     configure_logging(snakemake)
@@ -943,6 +949,7 @@ if __name__ == "__main__":
         snakemake.params.costs,
         nyears=1,
     )
+    nhours = n.snapshot_weightings.generators.sum()
     sector_options = snakemake.params.sector_options
     relocation_option = sector_options["relocation"]
 
