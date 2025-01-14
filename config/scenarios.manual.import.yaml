@@ -69,7 +69,7 @@ eu_import-all_relocation:
   co2_budget_DE_source: KSG
 
   sector:
-    relocation: true
+    relocation: "all"
 
 non_eu_import-all_relocation:
   iiasa_database:
@@ -78,7 +78,7 @@ non_eu_import-all_relocation:
   co2_budget_DE_source: KSG
 
   sector:
-    relocation: true
+    relocation: "all"
 
   import:
     enable: true

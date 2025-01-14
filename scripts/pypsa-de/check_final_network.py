@@ -3,7 +3,7 @@
 #
 # SPDX-License-Identifier: MIT
 """
-Checks if the config settings and the network is sound.
+Checks if the config settings and the network are sound.
 """
 
 import logging
@@ -43,7 +43,7 @@ def check_basic_config_settings(n, config):
         logger.error(
             "CO2 network not working yet. Please add code to the function adjust_industry_loads()."
         )
-
+    logger.info("Config is consistent.")
     return
 
 def check_meoh_architecture(n):
@@ -73,6 +73,7 @@ def check_meoh_architecture(n):
         # there is no DE - EU methanol transpot link
         assert("EU methanol -> DE methanol" not in n.links.index)
         assert("DE methanol -> EU methanol" not in n.links.index)
+    logger.info("Methanol check passed.")
     return
 
 
@@ -103,6 +104,7 @@ def check_nh3_architecture(n):
         # there is no DE - EU methanol transport link
         assert("EU NH3 -> DE NH3" not in n.links.index)
         assert("DE NH3 -> EU NH3" not in n.links.index)
+    logger.info("Ammonia check passed.")
     return
 
 
@@ -137,26 +139,75 @@ def check_steel_architecture(n):
         assert("DE steel -> EU steel" not in n.links.index)
         assert("EU hbi -> DE hbi" not in n.links.index)
         assert("DE hbi -> EU hbi" not in n.links.index)
+    logger.info("Steel/HBI check passed.")
+
+
+def check_non_eu_import_architecture(n):
+    # if non eu import is deactivated
+    if snakemake.params.non_eu:
+        # check that methanol can be imported to EU and to DE
+        assert(not n.links[
+            (n.links.bus0.str.contains("export")) & 
+            (n.links.bus1 == "DE methanol")].empty)
+        assert(not n.links[
+            (n.links.bus0.str.contains("export")) & 
+            (n.links.bus1 == "EU methanol")].empty)
+        # check ammonia import is possible
+        assert(not n.links[
+            (n.links.bus0.str.contains("export")) & 
+            (n.links.bus1 == "DE NH3")].empty)
+        assert(not n.links[
+            (n.links.bus0.str.contains("export")) & 
+            (n.links.bus1 == "EU NH3")].empty)
+        # check steel/hbi import is possible
+        assert(not n.links[
+            (n.links.bus0.str.contains("export")) & 
+            (n.links.bus1 == "DE steel")].empty)
+        assert(not n.links[
+            (n.links.bus0.str.contains("export")) & 
+            (n.links.bus1 == "EU steel")].empty)
+        assert(not n.links[
+            (n.links.bus0.str.contains("export")) & 
+            (n.links.bus1 == "DE hbi")].empty)
+        assert(not n.links[
+            (n.links.bus0.str.contains("export")) & 
+            (n.links.bus1 == "EU hbi")].empty)
+        assert(not n.links[
+            (n.links.bus0.str.contains("export")) &
+            (n.links.bus1 == "DE renewable oil")].empty)
+        assert(not n.links[
+            (n.links.bus0.str.contains("export")) &
+            (n.links.bus1 == "EU renewable oil")].empty)
+        # quick check for the remaining carrier
+        for carrier in ['import pipeline-h2', 'import shipping-lch4', 'import shipping-lh2']:
+            assert(carrier in n.links[n.links.bus0.str.contains("export")].carrier.unique())
+    else:
+        for carrier in ['import pipeline-h2', 'import shipping-lch4',
+       'import shipping-lh2', 'import shipping-hbi',
+       'import shipping-meoh', 'import shipping-steel',
+       'import shipping-lnh3', 'import shipping-ftfuel']:
+            assert(carrier not in n.carrier.index.unique())
+    logger.info("Non-European import check passed.")
 
 
 
 if __name__ == "__main__":
     if "snakemake" not in globals():
         snakemake = mock_snakemake(
-            "modify_final_network",
+            "check_final_network",
             simpl="",
             clusters=68,
             opts="",
             ll="vopt",
             sector_opts="none",
             planning_horizons="2030",
-            run="eu_import-nh3_relocation",
+            run="non_eu_import-all_relocation",
         )
 
     configure_logging(snakemake)
     logger.info("Checking the prenetwork for consistency.")
 
-    config = snakemake.params.config
+    config = snakemake.params.sector
     n = pypsa.Network(snakemake.input.network)
 
     check_basic_config_settings(n, config)
@@ -167,4 +218,4 @@ if __name__ == "__main__":
 
     check_steel_architecture(n)
 
-    logger.info("All checks passed.")
+    check_non_eu_import_architecture(n)

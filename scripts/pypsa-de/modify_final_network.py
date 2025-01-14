@@ -20,7 +20,11 @@ logger = logging.getLogger(__name__)
 
 
 DISTANCE_CRS = 3857
-carriers_eleh2 = ["pipeline-h2", "shipping-lh2", "hvdc-to-elec"]
+carriers_eleh2 = [
+    "pipeline-h2",
+    "shipping-lh2",
+    "hvdc-to-elec"
+]
 
 carriers_all = [
     "pipeline-h2",
@@ -29,14 +33,14 @@ carriers_all = [
     "shipping-lnh3",
     "shipping-ftfuel",
     "shipping-meoh",
-    "hvdc-to-elec",
+    # "hvdc-to-elec",
     "shipping-hbi",
     "shipping-steel",
 ]
 
 x = 10.5
 y = 51.2
-
+# TONI TODO: all done?
 lng_dictionary = {
     "T0557": "GBMLF",  # South Hook LNG terminal, UK
     "T0492": "BEZEE",  # Gate LNG terminal, Netherlands
@@ -279,7 +283,7 @@ def add_endogenous_hvdc_import_options(n, cost_factor=1.0):
 def add_import_options(
     n,
     capacity_boost=3.0,
-    import_options=[
+    import_carriers=[
         "hvdc-to-elec",
         "pipeline-h2",
         "shipping-lh2",
@@ -293,7 +297,7 @@ def add_import_options(
     endogenous_hvdc=False,
 ):
 
-    logger.info("Add import options: " + " ".join(import_options.keys()))
+    logger.info("Add import options: " + " ".join(import_carriers.keys()))
     fn = snakemake.input.gas_input_nodes_simplified
     import_nodes = pd.read_csv(fn, index_col=0)
     import_nodes["hvdc-to-elec"] = 15000
@@ -354,20 +358,22 @@ def add_import_options(
 
     # XX export countries specified in config
     export_buses = (
-        import_costs.query("esc in @import_options").exporter.unique() + " export"
+        import_costs.query("esc in @import_carriers").exporter.unique() + " export"
     )
     # add buses and a store with the capacity that can be imported from each exporter
+    n.add("Carrier", "export")
     n.add("Bus", export_buses, carrier="export")
     n.add(
         "Store",
         export_buses + " budget",
         bus=export_buses,
+        carrier="export",
         e_nom=import_config["exporter_energy_limit"],
         e_initial=import_config["exporter_energy_limit"],
     )
 
-    if endogenous_hvdc and "hvdc-to-elec" in import_options:
-        cost_factor = import_options.pop("hvdc-to-elec")
+    if endogenous_hvdc and "hvdc-to-elec" in import_carriers:
+        cost_factor = import_carriers.pop("hvdc-to-elec")
         # deletes hvdc-to-elec from import_options
         add_endogenous_hvdc_import_options(n, cost_factor)
 
@@ -378,7 +384,7 @@ def add_import_options(
         "shipping-lch4",
     }
 
-    for tech in set(import_options).intersection(regionalised_options):
+    for tech in set(import_carriers).intersection(regionalised_options):
 
         import_nodes_tech = import_nodes[tech].dropna()
         forbidden_importers = []
@@ -395,7 +401,7 @@ def add_import_options(
             import_costs.query("esc == @tech")
             .groupby(groupers)
             .marginal_cost.min()
-            .mul(import_options[tech])
+            .mul(import_carriers[tech])
             .reset_index()
         )
 
@@ -442,6 +448,8 @@ def add_import_options(
             else np.nan
         )
 
+        n.add("Carrier", "import " + tech)
+        n.add("Carrier", "import infrastructure " + tech)
         n.add("Bus", import_buses, carrier="import " + tech)
 
         n.add(
@@ -478,12 +486,12 @@ def add_import_options(
         "shipping-lnh3",
     }
 
-    for tech in set(import_options).intersection(copperplated_options):
+    for tech in set(import_carriers).intersection(copperplated_options):
         marginal_costs = (
             import_costs.query("esc == @tech")
             .groupby("exporter")
             .marginal_cost.min()
-            .mul(import_options[tech])
+            .mul(import_carriers[tech])
         )
 
         bus2 = "co2 atmosphere" if tech in co2_intensity else ""
@@ -497,7 +505,7 @@ def add_import_options(
         unit_to_mwh = 2.1 if tech in ["shipping-steel", "shipping-hbi"] else 1.0
 
         suffix = bus_suffix[tech]
-
+        n.add("Carrier", "import " + tech)
         n.add(
             "Link",
             marginal_costs.index + " import " + tech,
@@ -935,7 +943,7 @@ if __name__ == "__main__":
             ll="vopt",
             sector_opts="none",
             planning_horizons="2030",
-            run="eu_import-no_relocation",
+            run="non_eu_import-all_relocation",
         )
 
     configure_logging(snakemake)
@@ -972,7 +980,7 @@ if __name__ == "__main__":
             n,
             capacity_boost=import_options["capacity_boost"],
             endogenous_hvdc=import_options["endogenous_hvdc_import"]["enable"],
-            import_options=carriers,
+            import_carriers=carriers,
         )
 
     n.export_to_netcdf(snakemake.output.network)

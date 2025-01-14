@@ -803,7 +803,8 @@ rule modify_final_network:
 
 rule check_final_network:
     params:
-        config=config_provider("sector"),
+        sector=config_provider("sector"),
+        non_eu=config_provider("import", "enable"),
     input:
         network=RESULTS
         + "prenetworks-final-import/base_s_{clusters}_l{ll}_{opts}_{sector_opts}_{planning_horizons}.nc",

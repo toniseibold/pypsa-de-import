@@ -6,13 +6,13 @@
 run:
   prefix: import
   name:
-  - no_import-no_relocation
-  - eu_import-no_relocation
-  - eu_import-steel_relocation
-  - eu_import-nh3_relocation
-  - eu_import-meoh_relocation
-  - eu_import-all_relocation
-  # - non_eu_import-all_relocation
+  # - no_import-no_relocation
+  # - eu_import-no_relocation
+  # - eu_import-steel_relocation
+  # - eu_import-nh3_relocation
+  # - eu_import-meoh_relocation
+  # - eu_import-all_relocation
+  - non_eu_import-all_relocation
   scenarios:
     enable: true
     manual_file: config/scenarios.manual.import.yaml
