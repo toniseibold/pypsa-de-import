@@ -195,6 +195,7 @@ def add_wasserstoff_kernnetz(n, wkn, costs):
     )
 
     if not wkn_new.empty:
+        n.add("Carrier", "H2 pipeline (Kernnetz)")
         names = wkn_new.index + f"-kernnetz-{investment_year}"
 
         capital_costs = np.where(
@@ -902,6 +903,8 @@ def add_hydrogen_turbines(n):
         ].index
         if gas_plants.empty:
             continue
+        if "H2" + carrier not in n.carriers.index:
+            n.add("Carrier", "H2 " + carrier)
         h2_plants = n.links.loc[gas_plants].copy()
         h2_plants.carrier = h2_plants.carrier.str.replace(carrier, "H2 " + carrier)
         h2_plants.index = h2_plants.index.str.replace(carrier, "H2 " + carrier)
@@ -917,6 +920,8 @@ def add_hydrogen_turbines(n):
         & (n.links.index.str[:2] == "DE")
         & (n.links.p_nom_extendable)
     ].index
+    if "urban central H2 CHP" not in n.carriers.index:
+        n.add("Carrier", "urban central H2 CHP")
     h2_plants = n.links.loc[gas_plants].copy()
     h2_plants.carrier = h2_plants.carrier.str.replace("gas", "H2")
     h2_plants.index = h2_plants.index.str.replace("gas", "H2")
@@ -953,7 +958,8 @@ def force_retrofit(n, params):
         ].index
         if gas_plants.empty:
             continue
-
+        if "H2 retrofit " + carrier not in n.carriers.index:
+            n.add("Carrier", "H2 retrofit " + carrier)
         h2_plants = n.links.loc[gas_plants].copy()
         h2_plants.carrier = h2_plants.carrier.str.replace(
             carrier, "H2 retrofit " + carrier
@@ -977,7 +983,8 @@ def force_retrofit(n, params):
     ].index
     if gas_plants.empty:
         return
-
+    if "urban central H2 retrofit CHP" not in n.carriers.index:
+        n.add("Carrier", "urban central H2 retrofit CHP")
     h2_plants = n.links.loc[gas_plants].copy()
     h2_plants.carrier = h2_plants.carrier.str.replace("gas", "H2 retrofit")
     h2_plants.index = h2_plants.index.str.replace("gas", "H2 retrofit")
@@ -1265,7 +1272,7 @@ if __name__ == "__main__":
             ll="vopt",
             sector_opts="none",
             planning_horizons="2030",
-            run="eu_import-meoh_relocation",
+            run="non_eu_import-all_relocation",
         )
 
     configure_logging(snakemake)
@@ -1298,7 +1305,7 @@ if __name__ == "__main__":
     if not snakemake.config["run"]["debug_unravel_oilbus"]:
         unravel_oil(n)
 
-    if snakemake.params.relocation == "methanol":
+    if snakemake.params.relocation in ["methanol", "all"]:
         unravel_meoh(n, costs)
 
     if not snakemake.config["run"]["debug_unravel_gasbus"]:

@@ -33,7 +33,7 @@ carriers_all = [
     "shipping-lnh3",
     "shipping-ftfuel",
     "shipping-meoh",
-    # "hvdc-to-elec",
+    "hvdc-to-elec",
     "shipping-hbi",
     "shipping-steel",
 ]
@@ -96,6 +96,7 @@ def add_endogenous_hvdc_import_options(n, cost_factor=1.0):
     )
 
     with warnings.catch_warnings():
+        # TONI TODO: catch warning
         warnings.filterwarnings("ignore", category=DeprecationWarning)
         # xlinks
         xlinks = {}
@@ -111,6 +112,7 @@ def add_endogenous_hvdc_import_options(n, cost_factor=1.0):
                 )
                 xlinks[(bus0, bus1)] = link["length"]
 
+    # I have each exporter to all countries with length of HVDC cable
     import_links = pd.concat([import_links, pd.Series(xlinks)], axis=0)
     import_links = import_links.drop_duplicates(keep="first")
     duplicated = import_links.index.duplicated(keep="first")
@@ -128,7 +130,7 @@ def add_endogenous_hvdc_import_options(n, cost_factor=1.0):
     efficiency = cf["efficiency_static"] * cf["efficiency_per_1000km"] ** (
         import_links.values / 1e3
     )
-
+    n.add("Carrier", "import hvdc-to-elec")
     n.add(
         "Link",
         ["import hvdc-to-elec " + " ".join(idx).strip() for idx in import_links.index],
@@ -148,12 +150,12 @@ def add_endogenous_hvdc_import_options(n, cost_factor=1.0):
 
     for tech in ["solar-utility", "onwind", "offwind"]:
         p_max_pu_tech = p_max_pu.sel(technology=tech).to_pandas().dropna().T
-        # build average over every three lines but keeo index
+        # build average over every three lines but keep index
         p_max_pu_tech = p_max_pu_tech.resample(f"{hours}h").mean()
         exporters_tech_i = exporters.index.intersection(p_max_pu_tech.columns)
 
         grid_connection = costs.at["electricity grid connection", "fixed"]
-
+        n.add("Carrier", "external " + tech)
         n.add(
             "Generator",
             exporters_tech_i,
@@ -169,7 +171,7 @@ def add_endogenous_hvdc_import_options(n, cost_factor=1.0):
         )
 
     # hydrogen storage
-
+    n.add("Carrier", "external H2")
     h2_buses_i = n.add(
         "Bus", buses_i, suffix=" H2", carrier="external H2", location=buses_i
     )
@@ -186,6 +188,7 @@ def add_endogenous_hvdc_import_options(n, cost_factor=1.0):
         ]
         * cost_factor,
     )
+    n.add("Carrier", "external H2 Electrolysis")
 
     n.add(
         "Link",
@@ -198,7 +201,7 @@ def add_endogenous_hvdc_import_options(n, cost_factor=1.0):
         capital_cost=costs.at["electrolysis", "fixed"] * cost_factor,
         lifetime=costs.at["electrolysis", "lifetime"],
     )
-
+    n.add("Carrier", "external H2 Turbine")
     n.add(
         "Link",
         h2_buses_i + " H2 Turbine",
@@ -214,7 +217,7 @@ def add_endogenous_hvdc_import_options(n, cost_factor=1.0):
     )
 
     # battery storage
-
+    n.add("Carrier", "external battery")
     b_buses_i = n.add(
         "Bus", buses_i, suffix=" battery", carrier="external battery", location=buses_i
     )
@@ -229,7 +232,7 @@ def add_endogenous_hvdc_import_options(n, cost_factor=1.0):
         capital_cost=costs.at["battery storage", "fixed"] * cost_factor,
         lifetime=costs.at["battery storage", "lifetime"],
     )
-
+    n.add("Carrier", "external battery charger")
     n.add(
         "Link",
         b_buses_i + " charger",
@@ -241,7 +244,7 @@ def add_endogenous_hvdc_import_options(n, cost_factor=1.0):
         p_nom_extendable=True,
         lifetime=costs.at["battery inverter", "lifetime"],
     )
-
+    n.add("Carrier", "external battery discharger")
     n.add(
         "Link",
         b_buses_i + " discharger",
@@ -254,7 +257,7 @@ def add_endogenous_hvdc_import_options(n, cost_factor=1.0):
     )
 
     # add extra HVDC connections between MENA countries
-
+    n.add("Carrier", "external HVDC")
     for bus0_bus1 in cf.get("extra_connections", []):
         bus0, bus1 = bus0_bus1.split("-")
 

@@ -12,7 +12,7 @@ import pypsa
 
 logger = logging.getLogger(__name__)
 
-def check_basic_config_settings(n, config):
+def check_basic_config_settings(config, non_eu_config):
     """
     Checks if the basic settings are correct.
     """
@@ -42,6 +42,10 @@ def check_basic_config_settings(n, config):
     if config["co2network"]:
         logger.error(
             "CO2 network not working yet. Please add code to the function adjust_industry_loads()."
+        )
+    if non_eu_config["enable"] and not non_eu_config["endogenous_hvdc_import"]["enable"]:
+        logger.error(
+            "Non-European import must include endogenous HVDC import as well. Please set config['import']['endogenous_hvdc_import']['enable'] True."
         )
     logger.info("Config is consistent.")
     return
@@ -142,9 +146,9 @@ def check_steel_architecture(n):
     logger.info("Steel/HBI check passed.")
 
 
-def check_non_eu_import_architecture(n):
+def check_non_eu_import_architecture(n, non_eu_config):
     # if non eu import is deactivated
-    if snakemake.params.non_eu:
+    if non_eu_config["enable"]:
         # check that methanol can be imported to EU and to DE
         assert(not n.links[
             (n.links.bus0.str.contains("export")) & 
@@ -208,9 +212,10 @@ if __name__ == "__main__":
     logger.info("Checking the prenetwork for consistency.")
 
     config = snakemake.params.sector
+    non_eu_config = snakemake.params.non_eu
     n = pypsa.Network(snakemake.input.network)
 
-    check_basic_config_settings(n, config)
+    check_basic_config_settings(config, non_eu_config)
 
     check_meoh_architecture(n)
 
@@ -218,4 +223,4 @@ if __name__ == "__main__":
 
     check_steel_architecture(n)
 
-    check_non_eu_import_architecture(n)
+    check_non_eu_import_architecture(n, non_eu_config)
