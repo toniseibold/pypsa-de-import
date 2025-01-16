@@ -190,7 +190,7 @@ def check_non_eu_import_architecture(n, non_eu_config):
        'import shipping-lh2', 'import shipping-hbi',
        'import shipping-meoh', 'import shipping-steel',
        'import shipping-lnh3', 'import shipping-ftfuel']:
-            assert(carrier not in n.carrier.index.unique())
+            assert(carrier not in n.carriers.index.unique())
     logger.info("Non-European import check passed.")
 
 
