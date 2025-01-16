@@ -1,10 +1,54 @@
 # -*- coding: utf-8 -*-
 import logging
 import pandas as pd
+from xarray import DataArray
 
 from scripts.prepare_sector_network import determine_emission_sectors
 
 logger = logging.getLogger(__name__)
+
+
+def force_boiler_profiles_existing_per_boiler(n):
+    """
+    This scales each boiler dispatch to be proportional to the load profile.
+    """
+
+    logger.info(
+        "Forcing each existing boiler dispatch to be proportional to the load profile"
+    )
+
+    decentral_boilers = n.links.index[
+        n.links.carrier.str.contains("boiler")
+        & ~n.links.carrier.str.contains("urban central")
+        & ~n.links.p_nom_extendable
+    ]
+
+    if decentral_boilers.empty:
+        return
+
+    boiler_loads = n.links.loc[decentral_boilers, "bus1"]
+    boiler_loads = boiler_loads[boiler_loads.isin(n.loads_t.p_set.columns)]
+    decentral_boilers = boiler_loads.index
+    boiler_profiles_pu = n.loads_t.p_set[boiler_loads].div(
+        n.loads_t.p_set[boiler_loads].max(), axis=1
+    )
+    boiler_profiles_pu.columns = decentral_boilers
+    boiler_profiles = DataArray(
+        boiler_profiles_pu.multiply(n.links.loc[decentral_boilers, "p_nom"], axis=1)
+    )
+
+    # will be per unit
+    n.model.add_variables(coords=[decentral_boilers], name="Link-fixed_profile_scaling")
+
+    lhs = (1, n.model["Link-p"].loc[:, decentral_boilers]), (
+        -boiler_profiles,
+        n.model["Link-fixed_profile_scaling"],
+    )
+
+    n.model.add_constraints(lhs, "=", 0, "Link-fixed_profile_scaling")
+
+    # hack so that PyPSA doesn't complain there is nowhere to store the variable
+    n.links["fixed_profile_scaling_opt"] = 0.0
 
 
 def add_co2limit_country(n, limit_countries, snakemake, debug=False):
@@ -91,9 +135,11 @@ def add_co2limit_country(n, limit_countries, snakemake, debug=False):
         logger.info(
             f"Adding domestic aviation emissions for {ct} with a factor of {domestic_factor}"
         )
-
+        # Toni TODO: add non European import as well!
         # Adding Efuel imports and exports to constraint
         incoming_oil = n.links.index[n.links.index == "EU renewable oil -> DE oil"]
+        non_eu_oil = n.links.index[(n.links.carrier=="import shipping-ftfuel") & (n.links.bus1=="DE renewable oil")]
+        incoming_oil = incoming_oil.append(non_eu_oil)
         outgoing_oil = n.links.index[n.links.index == "DE renewable oil -> EU oil"]
 
         if not debug:
@@ -113,8 +159,10 @@ def add_co2limit_country(n, limit_countries, snakemake, debug=False):
                 ).sum()
             )
 
-        incoming_methanol = n.links.index[n.links.index == "EU methanol -> DE shipping methanol"]
-        outgoing_methanol = n.links.index[n.links.index == "DE methanol shipping -> EU methanol"]
+        incoming_methanol = n.links.index[n.links.index == "EU methanol -> DE methanol"]
+        non_eu_methanol = n.links.index[(n.links.carrier=="import shipping-meoh") & (n.links.bus1=="DE methanol")]
+        incoming_methanol = incoming_methanol.append(non_eu_methanol)
+        outgoing_methanol = n.links.index[n.links.index == "DE methanol -> EU methanol"]
 
         lhs.append(
             (
@@ -135,6 +183,8 @@ def add_co2limit_country(n, limit_countries, snakemake, debug=False):
 
         # Methane
         incoming_CH4 = n.links.index[n.links.index == "EU renewable gas -> DE gas"]
+        non_eu_CH4 = n.links.index[(n.links.carrier=="import infrastructure shipping-lch4") & (n.links.bus1=="DE renewable gas")]
+        incoming_CH4 = incoming_CH4.append(non_eu_CH4)
         outgoing_CH4 = n.links.index[n.links.index == "DE renewable gas -> EU gas"]
 
         lhs.append(
@@ -362,6 +412,8 @@ def custom_extra_functionality(n, snapshots, snakemake):
         )
     else:
         logger.warning("No national CO2 budget specified!")
+    # enforce boilers to follow heat demand
+    force_boiler_profiles_existing_per_boiler(n)
 
     limit_eu_de = constraints["limit_eu_de"]
     limit_non_eu_de = constraints["limit_non_eu_de"]
