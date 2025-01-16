@@ -517,16 +517,16 @@ sector:
   min_part_load_fischer_tropsch: 0.
   methanol:
     regional_methanol_demand: true  #set to true if regional CO2 constraints needed
-    methanol_reforming: false
-    methanol_reforming_cc: false
-    methanol_to_kerosene: false
+    methanol_reforming: true
+    methanol_reforming_cc: true
+    methanol_to_kerosene: true
     methanol_to_power:
-      ccgt: false
-      ccgt_cc: false
-      ocgt: false
-      allam: false
-    biomass_to_methanol: false
-    biomass_to_methanol_cc: false
+      ccgt: true
+      ccgt_cc: true
+      ocgt: true
+      allam: true
+    biomass_to_methanol: true
+    biomass_to_methanol_cc: true
   regional_oil_demand: true  #set to true if regional CO2 constraints needed
   regional_coal_demand: true  #set to true if regional CO2 constraints needed
   gas_network: false
