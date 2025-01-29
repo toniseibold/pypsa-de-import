@@ -978,8 +978,8 @@ def add_methanol_to_power(n, costs, types=None):
             carrier="CCGT methanol",
             p_nom_extendable=True,
             capital_cost=capital_cost,
-            overnight_cost=costs.at["CCGT", "investment"],
-            *costs.at["CCGT", "efficiency"],
+            overnight_cost=costs.at["CCGT", "investment"]
+            * costs.at["CCGT", "efficiency"],
             marginal_cost=costs.at["CCGT", "VOM"],
             efficiency=costs.at["CCGT", "efficiency"],
             efficiency2=costs.at["methanolisation", "carbondioxide-input"],
@@ -2035,7 +2035,7 @@ def add_EVs(
             efficiency=options["bev_charge_efficiency"],
         )
 
-    if options["bev_dsm"]:
+    if options["bev_dsm"] and options["bev_dsm"] <= investment_year:
         e_nom = (
             number_cars
             * options["bev_energy"]
