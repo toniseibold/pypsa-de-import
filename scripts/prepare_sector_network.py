@@ -5285,8 +5285,6 @@ if __name__ == "__main__":
         n, snakemake.params["adjustments"], investment_year
     )
 
-    adjust_renewable_profiles(n, pop_layout.index)
-
     relocation_option = options["relocation"]
     endogenise_steel(n, costs, options, relocation_option)
 
