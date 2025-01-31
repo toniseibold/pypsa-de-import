@@ -222,5 +222,5 @@ if __name__ == "__main__":
     check_nh3_architecture(n)
 
     check_steel_architecture(n)
-
-    check_non_eu_import_architecture(n, non_eu_config)
+    if int(snakemake.wildcards.planning_horizons) >= 2030:
+        check_non_eu_import_architecture(n, non_eu_config)

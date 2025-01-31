@@ -11,6 +11,8 @@ rule add_existing_baseyear:
         costs=config_provider("costs"),
         heat_pump_sources=config_provider("sector", "heat_pump_sources"),
         energy_totals_year=config_provider("energy", "energy_totals_year"),
+        industry=config_provider("industry"),
+        relocation=config_provider("sector", "relocation"),
     input:
         network=RESULTS
         + "prenetworks/base_s_{clusters}_l{ll}_{opts}_{sector_opts}_{planning_horizons}.nc",
@@ -29,6 +31,8 @@ rule add_existing_baseyear:
         ),
         heating_efficiencies=resources("heating_efficiencies.csv"),
         custom_powerplants=resources("german_chp_{clusters}.csv"),
+        regions_onshore=resources("regions_onshore_base_s_{clusters}.geojson"),
+        isi_data="import-data/Fraunhofer_Industry_Database.xlsx",
     output:
         RESULTS
         + "prenetworks-brownfield/base_s_{clusters}_l{ll}_{opts}_{sector_opts}_{planning_horizons}.nc",

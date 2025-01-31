@@ -2722,31 +2722,6 @@ def add_methanol(n, costs):
         add_methanol_reforming_cc(n, costs)
 
 
-def add_methanol(n, costs):
-    methanol_options = options["methanol"]
-    if not any(methanol_options.values()):
-        return
-
-    logger.info("Add methanol")
-    add_carrier_buses(n, "methanol")
-
-    if options["biomass"]:
-        if methanol_options["biomass_to_methanol"]:
-            add_biomass_to_methanol(n, costs)
-
-        if methanol_options["biomass_to_methanol"]:
-            add_biomass_to_methanol_cc(n, costs)
-
-    if methanol_options["methanol_to_power"]:
-        add_methanol_to_power(n, costs, types=methanol_options["methanol_to_power"])
-
-    if methanol_options["methanol_reforming"]:
-        add_methanol_reforming(n, costs)
-
-    if methanol_options["methanol_reforming_cc"]:
-        add_methanol_reforming_cc(n, costs)
-
-
 def add_biomass(n, costs):
     logger.info("Add biomass")
 
@@ -3815,7 +3790,7 @@ def add_industry(n, costs):
         bus1=spatial.oil.nodes,
         bus2=spatial.co2.nodes,
         carrier="Fischer-Tropsch",
-        efficiency=costs.at["Fischer-Tropsch", "efficiency"],
+        efficiency=1/costs.at["Fischer-Tropsch", "hydrogen-input"],
         capital_cost=costs.at["Fischer-Tropsch", "fixed"]
         * costs.at["Fischer-Tropsch", "efficiency"],  # EUR/MW_H2/a
         overnight_cost=costs.at["Fischer-Tropsch", "investment"]
@@ -4817,6 +4792,322 @@ def add_enhanced_geothermal(n, egs_potentials, egs_overlap, costs):
             )
 
 
+def get_industrial_demand():
+    # import ratios [MWh/t_Material]
+    fn = snakemake.input.industry_sector_ratios
+    sector_ratios = pd.read_csv(fn, header=[0, 1], index_col=0)
+
+    # material demand per node and industry [kt/a]
+    fn = snakemake.input.industrial_production
+    nodal_production = pd.read_csv(fn, index_col=0) / 1e3  # kt/a -> Mt/a
+
+    nodal_sector_ratios = pd.concat(
+        {node: sector_ratios[node[:2]] for node in nodal_production.index}, axis=1
+    )
+
+    nodal_production_stacked = nodal_production.stack()
+    nodal_production_stacked.index.names = [None, None]
+
+    # final energy consumption per node and industry (TWh/a)
+    nodal_df = (nodal_sector_ratios.multiply(nodal_production_stacked)).T
+
+    return nodal_df
+
+
+def endogenise_steel(n, costs, sector_options, relocation_option):
+
+    # industrial demand [TWh/a]
+    industrial_demand = get_industrial_demand() * 1e6  # TWh/a -> MWh/a
+    # industrial production in [kt/a]
+    industrial_production = (
+        pd.read_csv(snakemake.input.industrial_production, index_col=0) * 1e3
+    )  # kt/a -> t/a
+
+    pop_layout = pd.read_csv(snakemake.input.clustered_pop_layout, index_col=0)
+    DE_nodes = pop_layout[pop_layout.index.str[:2] == "DE"].index
+    EU_nodes = pop_layout[pop_layout.index.str[:2] != "DE"].index
+    nodes = pop_layout.index
+
+    endogenous_sectors = []
+    logger.info("Adding endogenous primary steel demand in tonnes.")
+    sector = "DRI + Electric arc"
+    endogenous_sectors += [sector]
+
+    if relocation_option in ["steel", "all"]:
+        DE_steel_nodes = "DE"
+        EU_steel_nodes = "EU"
+        sector_options["steel"]["relocation"] = True
+        german_steel_load = industrial_production.loc[DE_nodes][sector].sum() / nhours
+        EU_steel_load = industrial_production.loc[EU_nodes][sector].sum() / nhours
+
+    else:
+        DE_steel_nodes = DE_nodes
+        EU_steel_nodes = EU_nodes
+        german_steel_load = industrial_production.loc[DE_nodes][sector] / nhours
+        EU_steel_load = industrial_production.loc[EU_nodes][sector] / nhours
+        sector_options["steel"]["relocation"] = False
+
+    no_relocation = not sector_options["steel"]["relocation"]
+    no_flexibility = not sector_options["steel"]["flexibility"]
+
+    s = " not" if no_relocation else " "
+    logger.info(f"Steel industry relocation{s} activated.")
+
+    s = " not" if no_flexibility else " "
+    logger.info(f"Steel industry flexibility{s} activated.")
+
+    n.add("Carrier", "steel")
+    n.add("Carrier", "hbi")
+    n.add("Carrier", "DRI")
+    n.add("Carrier", "EAF")
+    # add steel bus for German bus regions and EU
+    n.add(
+        "Bus",
+        EU_steel_nodes,
+        suffix=" steel",
+        carrier="steel",
+        unit="t",
+    )
+
+    n.add(
+        "Bus",
+        DE_steel_nodes, 
+        suffix=" steel",
+        carrier="steel",
+        unit="t",
+    )
+
+    n.add(
+        "Bus",
+        EU_steel_nodes,
+        suffix=" hbi",
+        carrier="hbi",
+        unit="t",
+    )
+    n.add(
+        "Bus",
+        DE_steel_nodes,
+        suffix=" hbi",
+        carrier="hbi",
+        unit="t",
+    )
+    # load EU and DE steel
+    n.add(
+        "Load",
+        EU_steel_nodes,
+        suffix = " steel",
+        bus=EU_steel_nodes + " steel",
+        carrier="steel",
+        p_set=EU_steel_load,
+    )
+
+    n.add(
+        "Load",
+        DE_steel_nodes,
+        suffix=" steel",
+        bus=DE_steel_nodes + " steel",
+        carrier="steel",
+        p_set=german_steel_load,
+    )
+
+    if not no_flexibility:
+        n.add(
+            "Store",
+            EU_steel_nodes + " steel Store",
+            bus=EU_steel_nodes + " steel",
+            e_nom_extendable=True,
+            e_cyclic=True,
+            carrier="steel",
+        )
+        n.add(
+            "Store",
+            DE_steel_nodes + " steel Store",
+            bus=DE_steel_nodes + " steel",
+            e_nom_extendable=True,
+            e_cyclic=True,
+            carrier="steel",
+        )
+        n.add(
+            "Store",
+            EU_steel_nodes + " hbi Store",
+            bus=EU_steel_nodes + " hbi",
+            e_nom_extendable=True,
+            e_cyclic=True,
+            carrier="hbi",
+        )
+        n.add(
+            "Store",
+            DE_steel_nodes + " hbi Store",
+            bus=DE_steel_nodes + " hbi",
+            e_nom_extendable=True,
+            e_cyclic=True,
+            carrier="hbi",
+        )
+
+    #  Iron ore to hbi
+    electricity_input = costs.at["direct iron reduction furnace", "electricity-input"]
+    hydrogen_input = costs.at["direct iron reduction furnace", "hydrogen-input"]
+
+    marginal_cost = (
+        costs.at["iron ore DRI-ready", "commodity"]
+        * costs.at["direct iron reduction furnace", "ore-input"]
+        / electricity_input
+    )
+    n.add("Carrier", "DRI")
+    n.add(
+        "Link",
+        EU_nodes,
+        suffix=" DRI",
+        carrier="DRI",
+        capital_cost=costs.at["direct iron reduction furnace", "fixed"]
+        / electricity_input,
+        marginal_cost=marginal_cost,
+        p_nom=0, #p_nom_EU if no_relocation else 0,
+        p_nom_extendable=True, #False if no_relocation else True,
+        bus0=EU_nodes,
+        bus1=EU_steel_nodes + " hbi",
+        bus2=EU_nodes + " H2",
+        efficiency=1 / electricity_input,
+        efficiency2=-hydrogen_input / electricity_input,
+        lifetime=costs.at["direct iron reduction furnace", "lifetime"],
+    )
+    n.add(
+        "Link",
+        DE_nodes,
+        suffix=" DRI",
+        carrier="DRI",
+        capital_cost=costs.at["direct iron reduction furnace", "fixed"]
+        / electricity_input,
+        marginal_cost=marginal_cost,
+        p_nom=0, # p_nom_DE if no_relocation else 0,
+        p_nom_extendable=True, #False if no_relocation else True,
+        bus0=DE_nodes,
+        bus1=DE_steel_nodes + " hbi",
+        bus2=DE_nodes + " H2",
+        efficiency=1 / electricity_input,
+        efficiency2=-hydrogen_input / electricity_input,
+        lifetime=costs.at["direct iron reduction furnace", "lifetime"],
+    )
+
+    # HBI to steel via electric arc furnace
+    electricity_input = costs.at["electric arc furnace", "electricity-input"]
+
+    n.add(
+        "Link",
+        EU_nodes,
+        suffix=" EAF",
+        carrier="EAF",
+        capital_cost=costs.at["electric arc furnace", "fixed"] / electricity_input,
+        p_nom=0, # p_nom_EU if no_relocation else 0,
+        p_nom_extendable=True, #False if no_relocation else True,
+        bus0=EU_nodes,
+        bus1=EU_steel_nodes + " steel",
+        bus2=EU_steel_nodes + " hbi",
+        efficiency=1 / electricity_input,
+        efficiency2=-costs.at["electric arc furnace", "hbi-input"] / electricity_input,
+        lifetime=costs.at["electric arc furnace", "lifetime"]
+    )
+    n.add(
+        "Link",
+        DE_nodes,
+        suffix=" EAF",
+        carrier="EAF",
+        capital_cost=costs.at["electric arc furnace", "fixed"] / electricity_input,
+        p_nom=0, #  if no_relocation else 0,
+        p_nom_extendable=True, #False if no_relocation else True,
+        bus0=DE_nodes,
+        bus1=DE_steel_nodes + " steel",
+        bus2=DE_steel_nodes + " hbi",
+        efficiency=1 / electricity_input,
+        efficiency2=-costs.at["electric arc furnace", "hbi-input"] / electricity_input,
+    )
+
+    # allow transport of steel between EU and DE
+    if relocation_option in ["steel", "all"]:
+        n.add(
+            "Link",
+            [
+                "EU steel -> DE steel",
+                "DE steel -> EU steel",
+                "EU hbi -> DE hbi",
+                "DE hbi -> EU hbi",
+            ],
+            bus0=["EU steel", "DE steel", "EU hbi", "DE hbi"],
+            bus1=["DE steel", "EU steel", "DE hbi", "EU hbi"],
+            carrier=["steel", "steel", "hbi", "hbi"],
+            p_nom=1e4,
+            marginal_cost=0.1,
+            p_min_pu=0,
+        )
+
+    adjust_industry_loads(n, nodes, industrial_demand, endogenous_sectors)
+
+
+def adjust_industry_loads(n, nodes, industrial_demand, endogenous_sectors):
+
+    remaining_sectors = ~industrial_demand.index.get_level_values(1).isin(
+        endogenous_sectors
+    )
+
+    remaining_demand = (
+        industrial_demand.loc[(nodes, remaining_sectors), :].groupby(level=0).sum()
+    )
+
+    # methane
+    gas_demand = (
+        remaining_demand.loc[:, "methane"]
+        .groupby(level=0)
+        .sum()
+        .rename(index=lambda x: x + " gas for industry")
+        / nhours
+    )
+
+    n.loads.loc[gas_demand.index, "p_set"] = gas_demand.values
+
+    # hydrogen
+    h2_demand = (
+        remaining_demand.loc[:, "hydrogen"]
+        .groupby(level=0)
+        .sum()
+        .rename(index=lambda x: x + " H2 for industry")
+        / nhours
+    )
+
+    n.loads.loc[h2_demand.index, "p_set"] = h2_demand.values
+
+    # heat
+    heat_demand = (
+        remaining_demand.loc[:, "heat"]
+        .groupby(level=0)
+        .sum()
+        .rename(index=lambda x: x + " low-temperature heat for industry")
+        / nhours
+    )
+    n.loads.loc[heat_demand.index, "p_set"] = heat_demand.values
+
+    # elec
+    elec_demand = (
+        remaining_demand.loc[:, "elec"]
+        .groupby(level=0)
+        .sum()
+        .rename(index=lambda x: x + " industry electricity")
+        / nhours
+    )
+    n.loads.loc[elec_demand.index, "p_set"] = elec_demand.values
+
+    # process emission
+    process_emissions = (
+        -remaining_demand.loc[:, "process emission"]
+        .groupby(level=0)
+        .sum()
+        .rename(index=lambda x: x + " process emissions")
+        / nhours
+    )
+
+    n.loads.loc[process_emissions.index, "p_set"] = process_emissions.values
+
+
+
 # %%
 if __name__ == "__main__":
     if "snakemake" not in globals():
@@ -4825,11 +5116,11 @@ if __name__ == "__main__":
         snakemake = mock_snakemake(
             "prepare_sector_network",
             opts="",
-            clusters="38",
+            clusters="68",
             ll="vopt",
             sector_opts="",
             planning_horizons="2030",
-            run="eu_import-meoh_relocation",
+            run="no_import-no_relocation",
         )
 
     configure_logging(snakemake)
@@ -4993,6 +5284,11 @@ if __name__ == "__main__":
     maybe_adjust_costs_and_potentials(
         n, snakemake.params["adjustments"], investment_year
     )
+
+    adjust_renewable_profiles(n, pop_layout.index)
+
+    relocation_option = options["relocation"]
+    endogenise_steel(n, costs, options, relocation_option)
 
     n.meta = dict(snakemake.config, **dict(wildcards=dict(snakemake.wildcards)))
 

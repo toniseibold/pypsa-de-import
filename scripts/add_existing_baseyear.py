@@ -15,6 +15,7 @@ from types import SimpleNamespace
 import country_converter as coco
 import numpy as np
 import pandas as pd
+import geopandas as gpd
 import powerplantmatching as pm
 import pypsa
 import xarray as xr
@@ -1065,6 +1066,74 @@ def set_defaults(n):
             n.links.reversed = n.links.reversed.astype(bool)
 
 
+def add_existing_ammonia_plants(n, plant_data):
+    
+    buses = plant_data["bus"].tolist()
+
+    if snakemake.params.relocation in ["all", "ammonia"]:
+        ammonia_nodes = "EU NH3"
+    else:
+        ammonia_nodes = [item + " NH3" for item in buses]
+
+    n.add(
+        "Link",
+        (plant_data["bus"] + " " + plant_data["id_production_unit"].astype(str)).tolist(),
+        suffix=" Haber-Bosch",
+        bus0=buses,
+        bus1=ammonia_nodes,
+        bus2=[item + " H2" for item in buses],
+        p_nom=plant_data["Production in tons (calibrated)"].mul(industry["MWh_NH3_per_tNH3"]).div(8760).values,
+        p_nom_extendable=False,
+        carrier="Haber-Bosch",
+        efficiency=1 / costs.at["Haber-Bosch", "electricity-input"],
+        efficiency2=-costs.at["Haber-Bosch", "hydrogen-input"]
+        / costs.at["Haber-Bosch", "electricity-input"],
+        capital_cost=costs.at["Haber-Bosch", "fixed"]
+        / costs.at["Haber-Bosch", "electricity-input"],
+        overnight_cost=costs.at["Haber-Bosch", "investment"]
+        / costs.at["Haber-Bosch", "electricity-input"],
+        marginal_cost=costs.at["Haber-Bosch", "VOM"]
+        / costs.at["Haber-Bosch", "electricity-input"],
+        build_year=plant_data["Year of last modernisation"].tolist(),
+        lifetime=costs.at["Haber-Bosch", "lifetime"],
+    )
+
+
+def add_existing_meoh_plants(n, plant_data):
+    
+    buses = plant_data["bus"].tolist()
+    
+    if snakemake.params.relocation in ["all", "methanol"]:
+        methanol_nodes = "EU methanol"
+    else:
+        methanol_nodes = [item + " methanol" for item in buses]
+
+    n.add(
+        "Link",
+        (plant_data["bus"] + " " + plant_data["id_production_unit"].astype(str)).tolist(),
+        suffix=" methanolisation",
+        bus0=[item + " H2" for item in buses],
+        bus1=methanol_nodes,
+        bus2=buses,
+        bus3=[item + " co2 stored" for item in buses],
+        carrier="methanolisation",
+        p_nom=plant_data["Production in tons (calibrated)"].mul(industry["MWh_MeOH_per_tMeOH"]).div(8760).values,
+        p_nom_extendable=False,
+        p_min_pu=options["min_part_load_methanolisation"],
+        capital_cost=costs.at["methanolisation", "fixed"]
+        * options["MWh_MeOH_per_MWh_H2"],  # EUR/MW_H2/a
+        overnight_cost=costs.at["methanolisation", "investment"]
+        * options["MWh_MeOH_per_MWh_H2"],
+        marginal_cost=options["MWh_MeOH_per_MWh_H2"]
+        * costs.at["methanolisation", "VOM"],
+        build_year=plant_data["Year of last modernisation"].values,
+        lifetime=costs.at["methanolisation", "lifetime"],
+        efficiency=options["MWh_MeOH_per_MWh_H2"],
+        efficiency2=-options["MWh_MeOH_per_MWh_H2"] / options["MWh_MeOH_per_MWh_e"],
+        efficiency3=-options["MWh_MeOH_per_MWh_H2"] / options["MWh_MeOH_per_tCO2"],
+    )
+
+
 # %%
 if __name__ == "__main__":
     if "snakemake" not in globals():
@@ -1137,6 +1206,22 @@ if __name__ == "__main__":
 
     if options.get("cluster_heat_buses", False):
         cluster_heat_buses(n)
+    
+    # add existing industry
+    regions = gpd.read_file(snakemake.input.regions_onshore).set_index("name")
+    industry = snakemake.params.industry
+
+    isi_data = pd.read_excel(snakemake.input.isi_data, sheet_name="Database", index_col=0)
+    # assign bus region to each plant
+    geometry = gpd.points_from_xy(isi_data["Longitude"], isi_data["Latitude"])
+    plant_data = gpd.GeoDataFrame(isi_data, geometry=geometry, crs="EPSG:4326")
+
+    plant_data = gpd.sjoin(plant_data, regions, how="inner", predicate="within")
+    plant_data.rename(columns={"name": "bus"}, inplace=True)
+    
+    add_existing_ammonia_plants(n, plant_data[plant_data["Product"] == "Ammonia"])
+
+    add_existing_meoh_plants(n, plant_data[plant_data["Product"] == "Methanol"])
 
     n.meta = dict(snakemake.config, **dict(wildcards=dict(snakemake.wildcards)))
 

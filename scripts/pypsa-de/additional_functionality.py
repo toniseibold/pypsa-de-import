@@ -393,7 +393,7 @@ def ramp_up_limit_non_EU(n, n_snapshots, limits_volume_max, investment_year):
 
 
 
-def custom_extra_functionality(n, snapshots, snakemake):
+def additional_functionality(n, snapshots, snakemake):
     """
     Add custom extra functionality constraints.
     """
