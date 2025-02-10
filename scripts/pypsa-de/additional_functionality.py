@@ -135,7 +135,7 @@ def add_co2limit_country(n, limit_countries, snakemake, debug=False):
         logger.info(
             f"Adding domestic aviation emissions for {ct} with a factor of {domestic_factor}"
         )
-        # Toni TODO: add non European import as well!
+
         # Adding Efuel imports and exports to constraint
         incoming_oil = n.links.index[n.links.index == "EU renewable oil -> DE oil"]
         non_eu_oil = n.links.index[(n.links.carrier=="import shipping-ftfuel") & (n.links.bus1=="DE renewable oil")]

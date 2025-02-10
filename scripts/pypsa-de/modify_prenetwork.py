@@ -403,7 +403,6 @@ def unravel_oil(n):
         carrier="renewable oil",
         p_nom=1e6,
         p_min_pu=0,
-        marginal_cost=0.01,
     )
 
     n.add(
@@ -480,7 +479,6 @@ def unravel_meoh(n, costs):
         carrier="methanol",
         p_nom=1e6,
         p_min_pu=0,
-        marginal_cost=0.01,
     )
 
     # add stores
@@ -700,7 +698,6 @@ def unravel_gasbus(n, costs):
         carrier="renewable gas",
         p_nom=1e6,
         p_min_pu=0,
-        marginal_cost=0.01,
     )
 
     ### add links between renewable and fossil gas buses

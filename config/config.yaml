@@ -7,13 +7,13 @@ run:
   prefix: import
   name:
   # - no_import-no_relocation
-  # - eu_import-no_relocation
+  - eu_import-no_relocation
   # - eu_import-steel_relocation
   # - eu_import-nh3_relocation
   # - eu_import-meoh_relocation
   - eu_import-all_relocation
   - non_eu_import-all_relocation
-  - non_eu_import-no_relocation
+  # - non_eu_import-no_relocation
   scenarios:
     enable: true
     manual_file: config/scenarios.manual.import.yaml
@@ -63,9 +63,9 @@ scenario:
   - none
   planning_horizons:
   - 2025
-  - 2030
-  - 2035
-  - 2040
+  # - 2030
+  # - 2035
+  # - 2040
   - 2045
 
 existing_capacities:
@@ -492,6 +492,13 @@ import:
 sector:
   relocation: false
   ammonia: regional
+  co2network: false
+  use_fischer_tropsch_waste_heat: false
+  use_haber_bosch_waste_heat: false
+  use_methanolisation_waste_heat: false
+  use_methanation_waste_heat: false
+  use_fuel_cell_waste_heat: false
+  use_electrolysis_waste_heat: false
   steel:
     endogenous: true
     relocation: false
@@ -516,7 +523,6 @@ sector:
   biomass_spatial: true
   #TBD what to include in config
   #relax so no infeasibility in 2050 with no land transport demand
-  min_part_load_fischer_tropsch: 0.
   methanol:
     regional_methanol_demand: true  #set to true if regional CO2 constraints needed
     methanol_reforming: true
